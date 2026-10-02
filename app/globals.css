@@ -1,0 +1,62 @@
+:root {
+  --bg: #f3f5f7;
+  --ink: #14202b;
+  --muted: #5b6b79;
+  --line: #d3dae0;
+  --accent: #0b6e69;
+  --accent-ink: #ffffff;
+  --err: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10171d;
+    --ink: #e8edf1;
+    --muted: #93a3b1;
+    --line: #2b3944;
+    --accent: #3cc2b8;
+    --accent-ink: #06201e;
+    --err: #ff8a80;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 48px 20px 80px; }
+h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+.bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.bar input {
+  flex: 1; min-width: 0; padding: 12px 14px; font-size: 1rem;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: transparent; color: var(--ink);
+}
+button, .dl { font: inherit; cursor: pointer; }
+.bar button {
+  padding: 12px 20px; border: 0; border-radius: 8px; font-weight: 600;
+  background: var(--accent); color: var(--accent-ink);
+}
+.bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.error { color: var(--err); }
+.tabs { display: flex; align-items: center; gap: 4px; margin: 28px 0 16px; border-bottom: 1px solid var(--line); }
+.tab {
+  padding: 10px 16px; border: 0; background: none; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.dl { margin-left: auto; color: var(--accent); text-decoration: none; padding: 10px 4px; }
+.dl:hover { text-decoration: underline; }
+.frame {
+  border: 1px solid var(--line); border-radius: 10px; overflow: auto;
+  max-height: 75vh; background: #fff;
+}
+.frame img { display: block; width: 100%; height: auto; }
+.frame.phone { max-width: 390px; margin: 0 auto; border: 8px solid #1b2530; border-radius: 28px; }
+@media (max-width: 520px) {
+  .bar { flex-direction: column; }
+}
