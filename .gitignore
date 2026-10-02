@@ -44,4 +44,4 @@ pnpm-debug.log*
 
 # OS
 Thumbs.db
-.browser-profile/
+browser-profile/
