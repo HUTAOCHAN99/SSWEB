@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chromium, devices } from "playwright";
+import { getContext } from "../../../lib/browser";
+import { captureViaApi, ApiShotError } from "../../../lib/screenshotapi";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
 
@@ -17,6 +18,8 @@ function isPrivateIp(ip: string) {
     (a === 169 && b === 254)
   );
 }
+
+const CF_SELECTOR = 'iframe[src*="challenges.cloudflare.com"]';
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("url") ?? "";
@@ -40,16 +43,57 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Domain tidak ditemukan." }, { status: 400 });
   }
 
-  const browser = await chromium.launch();
+  // Pilih mesin: ENGINE=api | local | auto (default).
+  // auto: situs di LOCAL_HOSTS (default uma.moe) lewat Chrome lokal berprofil, sisanya lewat ScreenshotAPI kalau key tersedia.
+  const localHosts = (process.env.LOCAL_HOSTS ?? "uma.moe").split(",").map((h) => h.trim().toLowerCase());
+  const isLocalHost = localHosts.some((h) => target.hostname === h || target.hostname.endsWith("." + h));
+  const engineEnv = req.nextUrl.searchParams.get("engine") ?? process.env.ENGINE ?? "auto";
+  const useApi =
+    engineEnv === "api" || (engineEnv === "auto" && !isLocalHost && !!process.env.SCREENSHOTAPI_KEY);
+
+  if (useApi) {
+    try {
+      const { buf, contentType } = await captureViaApi(target.toString(), mode);
+      return new NextResponse(buf, { headers: { "Content-Type": contentType, "Cache-Control": "no-store" } });
+    } catch (e) {
+      const status = e instanceof ApiShotError ? e.status : 500;
+      return NextResponse.json({ error: (e as Error).message }, { status: status >= 400 && status < 600 ? status : 500 });
+    }
+  }
+
+  let page;
   try {
-    const context = await browser.newContext(
-      mode === "mobile"
-        ? { ...devices["iPhone 13"] }
-        : { viewport: { width: 1440, height: 900 } }
-    );
-    const page = await context.newPage();
+    const context = await getContext();
+    page = await context.newPage();
+    // Mobile hanya mengubah ukuran viewport; user agent tetap sama dengan yang diverifikasi
+    await page.setViewportSize(mode === "mobile" ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+
     await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+
+    // Kalau muncul verifikasi Cloudflare, beri waktu sebentar (kadang lolos sendiri di browser asli)
+    if ((await page.locator(CF_SELECTOR).count()) > 0) {
+      await page.locator(CF_SELECTOR).first().waitFor({ state: "detached", timeout: 8000 }).catch(() => {});
+      if ((await page.locator(CF_SELECTOR).count()) > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Situs meminta verifikasi Cloudflare. Buka /api/verify?url=" +
+              target.origin +
+              " , centang 'Verify you are human' sekali di jendela yang muncul, lalu coba lagi.",
+          },
+          { status: 403 }
+        );
+      }
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+    }
+
+    // Tutup popup "What's new" kalau muncul
+    await page
+      .locator("button.generic-button", { hasText: "Close" })
+      .first()
+      .click({ timeout: 3000 })
+      .catch(() => {});
 
     // Scroll otomatis supaya gambar lazy-load ikut termuat
     await page.evaluate(async () => {
@@ -67,7 +111,7 @@ export async function GET(req: NextRequest) {
         }, 150);
       });
     });
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(2000); // beri waktu chart selesai dirender
 
     const buf = await page.screenshot({ fullPage: true, type: "png" });
     return new NextResponse(new Uint8Array(buf), {
@@ -79,6 +123,6 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   } finally {
-    await browser.close();
+    await page?.close().catch(() => {});
   }
 }
